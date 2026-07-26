@@ -79,6 +79,16 @@ inline bool isAllowedFallbackExecutablePath(const QString& executablePath) {
            executablePath == QStringLiteral("/usr/libexec/kdeconnectd");
 }
 
+inline bool isAllowedFallbackProcess(const QString& executablePath,
+                                     std::uint32_t senderPid,
+                                     std::uint32_t kdeConnectOwnerPid,
+                                     std::uint32_t kdeConnectDaemonOwnerPid) {
+    if (!isAllowedFallbackExecutablePath(executablePath) || senderPid == 0)
+        return false;
+
+    return senderPid == kdeConnectOwnerPid || senderPid == kdeConnectDaemonOwnerPid;
+}
+
 inline std::optional<double> boundedFinite(double value, double maxAbs) {
     if (!std::isfinite(value) || maxAbs <= 0.0)
         return std::nullopt;

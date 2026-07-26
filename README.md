@@ -68,6 +68,10 @@ On Arch-like systems the useful package set is roughly:
 sudo pacman -S cmake gcc pkgconf qt6-base wayland libxkbcommon libei xdg-desktop-portal
 ```
 
+Arch Linux users can also install the community-maintained
+[`hypr-kdeconnect-fix-git`](https://aur.archlinux.org/packages/hypr-kdeconnect-fix-git)
+AUR package.
+
 ## Build
 
 ```sh
@@ -216,9 +220,9 @@ prompt on top of that, so it narrows the D-Bus attack surface instead:
 - RemoteDesktop and Session methods are accepted only from the current
   `org.freedesktop.portal.Desktop` owner.
 - Sessions are bound to that D-Bus sender and capped in number.
-- Empty app ids and substring spoofing are rejected. Accepted ids are exact KDE
-  Connect desktop ids plus the `surface-transient` fallback used by some
-  non-windowed local clients.
+- Accepted app ids are exact KDE Connect desktop ids; substring spoofing is
+  rejected. Empty and `surface-transient` ids are accepted only when the
+  session's D-Bus caller is verified as the system KDE Connect daemon process.
 - Notify calls are checked against the selected device mask and bounded before
   being forwarded to Wayland.
 

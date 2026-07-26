@@ -16,6 +16,7 @@ struct ResolvedKey {
 class KeyResolver {
   public:
     KeyResolver();
+    explicit KeyResolver(const xkb_rule_names& names);
     ~KeyResolver();
 
     KeyResolver(const KeyResolver&) = delete;
@@ -25,6 +26,8 @@ class KeyResolver {
     [[nodiscard]] std::optional<ResolvedKey> resolveKeysym(xkb_keysym_t keysym) const;
 
   private:
+    explicit KeyResolver(const xkb_rule_names* names);
+
     struct XkbContextDeleter {
         void operator()(xkb_context* context) const;
     };

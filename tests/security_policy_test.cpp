@@ -71,6 +71,16 @@ int main() {
                        "bare executable names should not be allowed as an app-id fallback");
     failures += expect(!hkcf::security::isAllowedFallbackExecutablePath(QStringLiteral("/tmp/kdeconnectd")),
                        "generic D-Bus clients should not be allowed as an app-id fallback");
+    failures += expect(hkcf::security::isAllowedFallbackProcess(QStringLiteral("/usr/bin/kdeconnectd"), 1200, 1200, 0),
+                       "KDE Connect owner connection should be allowed as an app-id fallback");
+    failures += expect(hkcf::security::isAllowedFallbackProcess(QStringLiteral("/usr/bin/kdeconnectd"), 1200, 1100, 1200),
+                       "a second D-Bus connection from the KDE Connect owner process should be allowed");
+    failures += expect(!hkcf::security::isAllowedFallbackProcess(QStringLiteral("/usr/bin/kdeconnectd"), 1200, 1100, 1100),
+                       "a different process running kdeconnectd should not inherit another daemon's trust");
+    failures += expect(!hkcf::security::isAllowedFallbackProcess(QStringLiteral("/tmp/kdeconnectd"), 1200, 1200, 1200),
+                       "a matching pid should not allow an untrusted executable path");
+    failures += expect(!hkcf::security::isAllowedFallbackProcess(QStringLiteral("/usr/bin/kdeconnectd"), 0, 0, 0),
+                       "missing process ids should not be allowed");
 
     return failures == 0 ? EXIT_SUCCESS : EXIT_FAILURE;
 }

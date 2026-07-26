@@ -102,29 +102,33 @@ std::optional<double> boundedDoubleArg(const QList<QVariant>& args, int index, d
     return hkcf::security::boundedFinite(*value, maxAbs);
 }
 
-QString executablePathForBusService(const QDBusConnection& connection, const QString& serviceName) {
+std::optional<std::uint32_t> processIdForBusService(const QDBusConnection& connection, const QString& serviceName) {
     QDBusConnectionInterface* bus = connection.interface();
     if (!bus || serviceName.isEmpty())
-        return {};
+        return std::nullopt;
 
     const QDBusReply<uint> pid = bus->servicePid(serviceName);
     if (!pid.isValid() || pid.value() == 0)
-        return {};
+        return std::nullopt;
 
-    return QFileInfo(QStringLiteral("/proc/%1/exe").arg(pid.value())).symLinkTarget();
+    return pid.value();
 }
 
-bool serviceOwnsKdeConnectName(const QDBusConnection& connection, const QString& serviceName) {
-    QDBusConnectionInterface* bus = connection.interface();
-    if (!bus || serviceName.isEmpty())
-        return false;
+QString verifiedKdeConnectExecutablePath(const QDBusConnection& connection, const QString& senderBusName) {
+    const auto senderPid = processIdForBusService(connection, senderBusName);
+    if (!senderPid)
+        return {};
 
-    for (const QString& kdeConnectName : {QStringLiteral("org.kde.kdeconnect"), QStringLiteral("org.kde.kdeconnect.daemon")}) {
-        const QDBusReply<QString> owner = bus->serviceOwner(kdeConnectName);
-        if (owner.isValid() && owner.value() == serviceName)
-            return true;
-    }
-    return false;
+    const QString executablePath = QFileInfo(QStringLiteral("/proc/%1/exe").arg(*senderPid)).symLinkTarget();
+    const std::uint32_t kdeConnectOwnerPid =
+        processIdForBusService(connection, QStringLiteral("org.kde.kdeconnect")).value_or(0);
+    const std::uint32_t kdeConnectDaemonOwnerPid =
+        processIdForBusService(connection, QStringLiteral("org.kde.kdeconnect.daemon")).value_or(0);
+
+    if (!security::isAllowedFallbackProcess(executablePath, *senderPid, kdeConnectOwnerPid, kdeConnectDaemonOwnerPid))
+        return {};
+
+    return executablePath;
 }
 
 void sendPortalRequestResponse(const QDBusConnection& connection, const QDBusMessage& response) {
@@ -716,11 +720,8 @@ bool PortalBackend::isAllowedApp(const QString& appId, const QString& sessionPat
     if (!senderBusName)
         return false;
 
-    if (!serviceOwnsKdeConnectName(connection, *senderBusName))
-        return false;
-
-    const QString executablePath = executablePathForBusService(connection, *senderBusName);
-    if (!security::isAllowedFallbackExecutablePath(executablePath))
+    const QString executablePath = verifiedKdeConnectExecutablePath(connection, *senderBusName);
+    if (executablePath.isEmpty())
         return false;
 
     qInfo() << "allowing RemoteDesktop session with fallback app id" << safeForLog(appId) << "from" << executablePath << *senderBusName;

@@ -18,11 +18,17 @@ void KeyResolver::XkbStateDeleter::operator()(xkb_state* state) const {
 }
 
 KeyResolver::KeyResolver()
+    : KeyResolver(nullptr) {}
+
+KeyResolver::KeyResolver(const xkb_rule_names& names)
+    : KeyResolver(&names) {}
+
+KeyResolver::KeyResolver(const xkb_rule_names* names)
     : m_context(xkb_context_new(XKB_CONTEXT_NO_FLAGS)) {
     if (!m_context)
         return;
 
-    m_keymap.reset(xkb_keymap_new_from_names(m_context.get(), nullptr, XKB_KEYMAP_COMPILE_NO_FLAGS));
+    m_keymap.reset(xkb_keymap_new_from_names(m_context.get(), names, XKB_KEYMAP_COMPILE_NO_FLAGS));
     if (!m_keymap)
         return;
 

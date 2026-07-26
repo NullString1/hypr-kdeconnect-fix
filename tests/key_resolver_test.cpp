@@ -18,7 +18,17 @@ int expect(bool condition, const char* message) {
 } // namespace
 
 int main() {
-    hkcf::KeyResolver resolver;
+    // Keep this test independent of XKB_DEFAULT_* and the host's keyboard
+    // configuration. The production constructor intentionally uses those
+    // defaults, while these expected evdev positions describe a US keymap.
+    const xkb_rule_names names{
+        .rules = "evdev",
+        .model = "pc105",
+        .layout = "us",
+        .variant = "",
+        .options = "",
+    };
+    hkcf::KeyResolver resolver(names);
     int failures = 0;
 
     failures += expect(resolver.valid(), "resolver should initialize");

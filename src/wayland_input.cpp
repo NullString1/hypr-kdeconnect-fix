@@ -209,6 +209,11 @@ bool WaylandInput::sendKeyboardKeymap() {
         return false;
     }
 
+    m_shiftIndex = xkb_keymap_mod_get_index(keymap, XKB_MOD_NAME_SHIFT);
+    m_ctrlIndex = xkb_keymap_mod_get_index(keymap, XKB_MOD_NAME_CTRL);
+    m_altIndex = xkb_keymap_mod_get_index(keymap, XKB_MOD_NAME_ALT);
+    m_superIndex = xkb_keymap_mod_get_index(keymap, XKB_MOD_NAME_LOGO);
+
     char* keymapText = xkb_keymap_get_as_string(keymap, XKB_KEYMAP_FORMAT_TEXT_V1);
     xkb_keymap_unref(keymap);
     xkb_context_unref(context);
@@ -245,6 +250,66 @@ bool WaylandInput::sendKeyboardKeymap() {
     ok = flush();
     close(*fd);
     return ok;
+}
+
+void WaylandInput::updateModifiers() {
+    if (!m_keyboard)
+        return;
+
+    std::uint32_t depressed = 0;
+    const auto applyMask = [&depressed](int count, xkb_mod_index_t index) {
+        if (count > 0 && index != XKB_MOD_INVALID && index < 32)
+            depressed |= 1u << index;
+    };
+    applyMask(m_shiftCount, m_shiftIndex);
+    applyMask(m_ctrlCount, m_ctrlIndex);
+    applyMask(m_altCount, m_altIndex);
+    applyMask(m_superCount, m_superIndex);
+
+    m_depressedModifiers = depressed;
+    zwp_virtual_keyboard_v1_modifiers(m_keyboard, depressed, 0, 0, 0);
+}
+
+bool WaylandInput::keyboardKeycode(std::uint32_t keycode, bool pressed) {
+    if (!security::isAllowedKeyboardKeycode(keycode)) {
+        setError(QStringLiteral("invalid keyboard keycode"));
+        return false;
+    }
+    if (!ensureReady())
+        return false;
+
+    int* modifierCount = nullptr;
+    switch (keycode) {
+    case KEY_LEFTSHIFT:
+    case KEY_RIGHTSHIFT:
+        modifierCount = &m_shiftCount;
+        break;
+    case KEY_LEFTCTRL:
+    case KEY_RIGHTCTRL:
+        modifierCount = &m_ctrlCount;
+        break;
+    case KEY_LEFTALT:
+    case KEY_RIGHTALT:
+        modifierCount = &m_altCount;
+        break;
+    case KEY_LEFTMETA:
+    case KEY_RIGHTMETA:
+        modifierCount = &m_superCount;
+        break;
+    default:
+        break;
+    }
+
+    if (modifierCount) {
+        if (pressed)
+            ++(*modifierCount);
+        else
+            *modifierCount = std::max(0, *modifierCount - 1);
+        updateModifiers();
+    }
+
+    zwp_virtual_keyboard_v1_key(m_keyboard, timeMs(), keycode, pressed ? kKeyboardKeyPressed : kKeyboardKeyReleased);
+    return flush();
 }
 
 bool WaylandInput::pointerMotion(double dx, double dy) {
@@ -344,18 +409,6 @@ bool WaylandInput::pointerAxisDiscrete(std::uint32_t axis, int steps) {
     return flush();
 }
 
-bool WaylandInput::keyboardKeycode(std::uint32_t keycode, bool pressed) {
-    if (!security::isAllowedKeyboardKeycode(keycode)) {
-        setError(QStringLiteral("invalid keyboard keycode"));
-        return false;
-    }
-    if (!ensureReady())
-        return false;
-
-    zwp_virtual_keyboard_v1_key(m_keyboard, timeMs(), keycode, pressed ? kKeyboardKeyPressed : kKeyboardKeyReleased);
-    return flush();
-}
-
 bool WaylandInput::keyboardKeysym(std::uint32_t keysym, bool pressed) {
     if (!security::isAllowedKeysym(keysym)) {
         setError(QStringLiteral("invalid keyboard keysym"));
@@ -432,6 +485,11 @@ void WaylandInput::cleanup() {
         zwp_virtual_keyboard_v1_destroy(m_keyboard);
         m_keyboard = nullptr;
     }
+    m_shiftCount = 0;
+    m_ctrlCount = 0;
+    m_altCount = 0;
+    m_superCount = 0;
+    m_depressedModifiers = 0;
     if (m_pointer) {
         zwlr_virtual_pointer_v1_destroy(m_pointer);
         m_pointer = nullptr;

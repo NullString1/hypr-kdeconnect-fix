@@ -91,6 +91,20 @@ class WaylandInput {
     KeyResolver m_keyResolver;
     QHash<std::uint32_t, int> m_keysymShiftCounts;
     int m_shiftedKeysDown = 0;
+
+    xkb_mod_index_t m_shiftIndex = XKB_MOD_INVALID;
+    xkb_mod_index_t m_ctrlIndex = XKB_MOD_INVALID;
+    xkb_mod_index_t m_altIndex = XKB_MOD_INVALID;
+    xkb_mod_index_t m_superIndex = XKB_MOD_INVALID;
+
+    int m_shiftCount = 0;
+    int m_ctrlCount = 0;
+    int m_altCount = 0;
+    int m_superCount = 0;
+
+    std::uint32_t m_depressedModifiers = 0;
+
+    void updateModifiers();
 };
 
 } // namespace hkcf

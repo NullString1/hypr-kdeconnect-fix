@@ -16,6 +16,7 @@
 #include <QDBusVariant>
 #include <QDebug>
 #include <QFileInfo>
+#include <unistd.h>
 #include <QTimer>
 
 namespace hkcf {
@@ -119,7 +120,20 @@ QString verifiedKdeConnectExecutablePath(const QDBusConnection& connection, cons
     if (!senderPid)
         return {};
 
-    const QString executablePath = QFileInfo(QStringLiteral("/proc/%1/exe").arg(*senderPid)).symLinkTarget();
+    // QFileInfo::symLinkTarget() sizes its read buffer from lstat's st_size,
+    // which /proc "magic" symlinks (exe, cwd, ...) always report as 0 -
+    // so it silently returns empty here. A raw readlink() with a fixed buffer
+    // is what /proc entries actually need.
+    QString executablePath;
+    {
+        char buf[4096];
+        const QByteArray procExePath = QStringLiteral("/proc/%1/exe").arg(*senderPid).toLocal8Bit();
+        const ssize_t len = ::readlink(procExePath.constData(), buf, sizeof(buf) - 1);
+        if (len > 0) {
+            buf[len] = 0;
+            executablePath = QString::fromLocal8Bit(buf, static_cast<int>(len));
+        }
+    }
     const std::uint32_t kdeConnectOwnerPid =
         processIdForBusService(connection, QStringLiteral("org.kde.kdeconnect")).value_or(0);
     const std::uint32_t kdeConnectDaemonOwnerPid =

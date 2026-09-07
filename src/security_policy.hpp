@@ -79,11 +79,30 @@ inline bool isAllowedFallbackExecutablePath(const QString& executablePath) {
            executablePath == QStringLiteral("/usr/libexec/kdeconnectd");
 }
 
+// K&K: Deskflow (deskflow-core) hat keinen KDE-Connect-D-Bus-Namen, den man
+// gegenpruefen koennte. Der /proc/PID/exe-Pfad selbst ist bereits faelschungssicher
+// (kein Prozess kann einen fremden Pfad vorspiegeln), daher reicht er hier allein.
+// Zweiter Fall: ein lokaler Source-Build (fuer Fixes, die noch nicht in der
+// Distro-Paketversion stecken) unter <home>/deskflow-src/build/bin/deskflow-core -
+// gleiche Faelschungssicherheit ueber /proc/PID/exe wie beim Paket-Binary, nur
+// eben ausserhalb von /usr. Auf den Home-Verzeichnis-Namen wird bewusst nicht
+// geprueft, damit das auf jeder Maschine funktioniert.
+inline bool isDeskflowExecutablePath(const QString& executablePath) {
+    return executablePath == QStringLiteral("/usr/bin/deskflow-core") ||
+           executablePath.endsWith(QStringLiteral("/deskflow-src/build/bin/deskflow-core"));
+}
+
 inline bool isAllowedFallbackProcess(const QString& executablePath,
                                      std::uint32_t senderPid,
                                      std::uint32_t kdeConnectOwnerPid,
                                      std::uint32_t kdeConnectDaemonOwnerPid) {
-    if (!isAllowedFallbackExecutablePath(executablePath) || senderPid == 0)
+    if (senderPid == 0)
+        return false;
+
+    if (isDeskflowExecutablePath(executablePath))
+        return true;
+
+    if (!isAllowedFallbackExecutablePath(executablePath))
         return false;
 
     return senderPid == kdeConnectOwnerPid || senderPid == kdeConnectDaemonOwnerPid;

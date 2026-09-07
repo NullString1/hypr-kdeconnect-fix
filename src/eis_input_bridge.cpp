@@ -395,6 +395,19 @@ eis_device* EisInputBridge::addAbsolutePointer(eis_seat* seat) {
     eis_device_configure_type(device, EIS_DEVICE_TYPE_VIRTUAL);
     eis_device_configure_name(device, "hypr-kdeconnect absolute pointer");
     eis_device_configure_capability(device, EIS_DEVICE_CAP_POINTER_ABSOLUTE);
+    // K&K: Deskflow's EiScreen::addDevice() only latches m_eiAbs onto a device
+    // that has POINTER_ABSOLUTE *and* BUTTON *and* SCROLL all at once (see
+    // deskflow src/lib/platform/EiScreen.cpp). We used to split those across
+    // addPointer() (relative + button + scroll) and this device (absolute
+    // only), so m_eiAbs never matched and EiScreen::enter() silently skipped
+    // positioning the cursor on screen entry (no fakeMouseMove call at all -
+    // observed as "leaving screen"/"entering screen" oscillating without the
+    // cursor ever actually landing on this client). Deskflow never routes real
+    // button/scroll events through the absolute device (those go through
+    // m_eiPointer, see fakeMouseButton/fakeMouseWheel), so advertising the
+    // capability here purely satisfies the matching check and is otherwise inert.
+    eis_device_configure_capability(device, EIS_DEVICE_CAP_BUTTON);
+    eis_device_configure_capability(device, EIS_DEVICE_CAP_SCROLL);
     configureRegion(device, m_input.logicalBounds());
     eis_device_add(device);
     eis_device_resume(device);

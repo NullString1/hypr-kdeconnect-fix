@@ -69,6 +69,7 @@ class WaylandInput {
     [[nodiscard]] bool connect();
     [[nodiscard]] bool createDevices();
     [[nodiscard]] bool sendKeyboardKeymap();
+    void updateModifiers(std::uint32_t keycode, bool pressed);
     [[nodiscard]] std::uint32_t timeMs() const;
     [[nodiscard]] QRect outputBounds() const;
     bool flush();
@@ -91,6 +92,11 @@ class WaylandInput {
     KeyResolver m_keyResolver;
     QHash<std::uint32_t, int> m_keysymShiftCounts;
     int m_shiftedKeysDown = 0;
+    xkb_state* m_xkbState = nullptr;
+    std::uint32_t m_lastDepressed = ~0u;
+    std::uint32_t m_lastLatched = ~0u;
+    std::uint32_t m_lastLocked = ~0u;
+    std::uint32_t m_lastGroup = ~0u;
 };
 
 } // namespace hkcf

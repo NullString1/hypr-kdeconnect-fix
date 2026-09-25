@@ -209,6 +209,10 @@ bool WaylandInput::sendKeyboardKeymap() {
         return false;
     }
 
+    if (m_xkbState)
+        xkb_state_unref(m_xkbState);
+    m_xkbState = xkb_state_new(keymap);
+
     char* keymapText = xkb_keymap_get_as_string(keymap, XKB_KEYMAP_FORMAT_TEXT_V1);
     xkb_keymap_unref(keymap);
     xkb_context_unref(context);
@@ -353,7 +357,35 @@ bool WaylandInput::keyboardKeycode(std::uint32_t keycode, bool pressed) {
         return false;
 
     zwp_virtual_keyboard_v1_key(m_keyboard, timeMs(), keycode, pressed ? kKeyboardKeyPressed : kKeyboardKeyReleased);
-    return flush();
+    bool ok = flush();
+    if (!ok)
+        return false;
+
+    updateModifiers(keycode, pressed);
+    return true;
+}
+
+void WaylandInput::updateModifiers(std::uint32_t keycode, bool pressed) {
+    if (!m_keyboard || !m_xkbState)
+        return;
+
+    xkb_state_update_key(m_xkbState, static_cast<xkb_keycode_t>(keycode + 8), pressed ? XKB_KEY_DOWN : XKB_KEY_UP);
+
+    const std::uint32_t depressed = xkb_state_serialize_mods(m_xkbState, XKB_STATE_MODS_DEPRESSED);
+    const std::uint32_t latched = xkb_state_serialize_mods(m_xkbState, XKB_STATE_MODS_LATCHED);
+    const std::uint32_t locked = xkb_state_serialize_mods(m_xkbState, XKB_STATE_MODS_LOCKED);
+    const std::uint32_t group = xkb_state_serialize_layout(m_xkbState, XKB_STATE_LAYOUT_EFFECTIVE);
+
+    if (depressed == m_lastDepressed && latched == m_lastLatched && locked == m_lastLocked && group == m_lastGroup)
+        return;
+
+    m_lastDepressed = depressed;
+    m_lastLatched = latched;
+    m_lastLocked = locked;
+    m_lastGroup = group;
+
+    zwp_virtual_keyboard_v1_modifiers(m_keyboard, depressed, latched, locked, group);
+    flush();
 }
 
 bool WaylandInput::keyboardKeysym(std::uint32_t keysym, bool pressed) {
@@ -428,6 +460,10 @@ bool WaylandInput::flush() {
 }
 
 void WaylandInput::cleanup() {
+    if (m_xkbState) {
+        xkb_state_unref(m_xkbState);
+        m_xkbState = nullptr;
+    }
     if (m_keyboard) {
         zwp_virtual_keyboard_v1_destroy(m_keyboard);
         m_keyboard = nullptr;
